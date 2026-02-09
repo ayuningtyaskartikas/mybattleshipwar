@@ -39,15 +39,16 @@ body{
   padding: 18px 16px 40px 16px;
 }
 
+
 canvas{
-  width: 100%;
-  height: auto;
+  background: #ffffff;              /* clean white game area */
   border-radius: 14px;
   border: 1px solid var(--line);
-  background: rgba(239,236,228,.03);
-  display:block;
-  touch-action: manipulation;
+  display: block;
+  width: 100%;
+  height: auto;
 }
+
 
 .help{
   margin-top: 14px;

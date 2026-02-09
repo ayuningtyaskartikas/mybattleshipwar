@@ -27,26 +27,111 @@
     return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
   };
 
-  // ===== Settings (web version of your Prefs) =====
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`Failed to load image: ${src}`));
+      img.src = src;
+    });
+  }
+
+  // ===== SPEED SETTINGS (tweak these) =====
+const SPEED = {
+  ship: 0.0014,          // ship horizontal speed (multiplied by canvas width)
+  planeMin: 0.0016,      // airplane speed range
+  planeMax: 0.0038,
+  subMin: 0.0009,        // submarine speed range
+  subMax: 0.0021,
+  missileVX: 0.010,      // missile side speed (multiplied by canvas width)
+  missileVY: 0.030,      // missile upward speed (multiplied by canvas height)
+  depthVY: 0.010         // depth charge downward speed (multiplied by canvas height)
+};
+
+
+  // Draw image flipped horizontally (no flip files needed)
+  function drawImageFlip(img, x, y, w, h, flipX) {
+    if (!flipX) {
+      ctx.drawImage(img, x, y, w, h);
+      return;
+    }
+    ctx.save();
+    ctx.translate(x + w, y);
+    ctx.scale(-1, 1);
+    ctx.drawImage(img, 0, 0, w, h);
+    ctx.restore();
+  }
+
+  function canvasCSS() {
+    const rect = canvas.getBoundingClientRect();
+    return { w: rect.width, h: rect.height };
+  }
+
+  // ===== Settings =====
   const SETTINGS = {
-    planeCount: 6,    // similar to your pref values
+    planeCount: 6,
+    subCount: 3,
     subSpeed: 10,
     rapidDepth: false,
     rapidMissile: false,
-    planeDir: "B",    // "L" "R" "B"
+    planeDir: "B",     // "L" "R" "B"
+    gameSeconds: 180
   };
 
-  // ===== High Score (web version of HighScoreManager) =====
+  // ===== High Score =====
   const HS_KEY = "battleshipwar_highscore";
   let highScore = Number(localStorage.getItem(HS_KEY) || 0);
   highEl.textContent = String(highScore);
 
   // ===== Game State =====
   let score = 0;
-  let timeLeft = 180;
+  let timeLeft = SETTINGS.gameSeconds;
   let lastSecondAt = performance.now();
   let paused = false;
   let gameOver = false;
+
+  // ===== Assets =====
+  const ASSETS = {
+    ship: "assets/ship.png",
+    water: "assets/water.png",
+    depth: "assets/depthcharge.png",
+
+    planeBig: "assets/airplane-big.png",
+    planeMed: "assets/airplane-medium.png",
+    planeSmall: "assets/airplane-small.png",
+
+    subBig: "assets/submarine-big.png",
+    subMed: "assets/submarine-medium.png",
+    subSmall: "assets/submarine-small.png",
+
+    expPlane: "assets/explosion_airplane.PNG",
+    expSub: "assets/explosion.PNG",
+  };
+
+  let IMG = null;
+
+  // ===== Canvas sizing (crisp on retina) =====
+  function fitCanvas() {
+    const maxW = 980;
+    const cssW = Math.min(maxW, Math.max(320, window.innerWidth - 32));
+    const cssH = Math.round(cssW * 0.62);
+
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.style.width = cssW + "px";
+    canvas.style.height = cssH + "px";
+    canvas.width = Math.floor(cssW * dpr);
+    canvas.height = Math.floor(cssH * dpr);
+
+    // draw in CSS pixels
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    resetGame();
+  }
+
+  window.addEventListener("resize", () => {
+    clearTimeout(window.__fitT);
+    window.__fitT = setTimeout(fitCanvas, 120);
+  });
 
   // ===== Entities =====
   class Sprite {
@@ -55,67 +140,56 @@
       this.vx = vx; this.vy = vy;
       this.dead = false;
     }
+    rect() { return { x: this.x, y: this.y, w: this.w, h: this.h }; }
     move() { this.x += this.vx; this.y += this.vy; }
     draw() {}
-    rect() { return { x: this.x, y: this.y, w: this.w, h: this.h }; }
   }
 
   class Ship extends Sprite {
     constructor() {
-      const w = canvas.width * 0.18;
-      const h = w * 0.5;
-      const x = (canvas.width - w) / 2;
-      const y = canvas.height * 0.48;
-      super(x, y, w, h, 2.6, 0);
+      const { w, h } = canvasCSS();
+      const size = w * 0.20;
+      const x = (w - size) / 2;
+      const y = (h - size) / 2;
+      super(x, y, size, size, w * SPEED.ship, 0);
     }
     move() {
       super.move();
-      // bounce between edges like your Android ship
+      const { w } = canvasCSS();
       if (this.x < 0) this.vx *= -1;
-      if (this.x + this.w > canvas.width * 0.8) this.vx *= -1;
+      if (this.x + this.w > w * 0.8) this.vx *= -1;
     }
     getLeftCannon() {
-      return { x: this.x + this.w * 0.18, y: this.y + this.h * 0.05 };
+    const ox = 0.20;  // was 0.23 → move LEFT
+    const oy = 0.66;
+    return { x: this.x + this.w * ox, y: this.y + this.h * oy };
     }
+
     getRightCannon() {
-      return { x: this.x + this.w * 0.82, y: this.y + this.h * 0.05 };
+    const ox = 0.80;  // was 0.77 → move RIGHT
+    const oy = 0.66;
+    return { x: this.x + this.w * ox, y: this.y + this.h * oy };
     }
+
     getBottomCenter() {
-      return { x: this.x + this.w * 0.5, y: this.y + this.h * 0.95 };
+    // depth charge drop point
+    return { x: this.x + this.w * 0.50, y: this.y + this.h * 0.92 };
     }
-    draw() {
-      // Simple ship shape (replace with images later)
-      ctx.save();
-      ctx.fillStyle = "rgba(239,236,228,0.9)";
-      ctx.strokeStyle = "rgba(167,150,124,0.8)";
-      ctx.lineWidth = 2;
-
-      // body
-      ctx.beginPath();
-      ctx.roundRect(this.x, this.y, this.w, this.h, 10);
-      ctx.fill();
-      ctx.stroke();
-
-      // cannons
-      ctx.fillStyle = "rgba(20,35,33,0.9)";
-      const lc = this.getLeftCannon();
-      const rc = this.getRightCannon();
-      ctx.beginPath(); ctx.arc(lc.x, lc.y + 6, 4, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(rc.x, rc.y + 6, 4, 0, Math.PI * 2); ctx.fill();
-
-      ctx.restore();
-    }
+    draw() { ctx.drawImage(IMG.ship, this.x, this.y, this.w, this.h); }
   }
 
   class Missile extends Sprite {
     constructor(x, y, dir) {
       super(x - 4, y - 8, 8, 16, dir === "L" ? -10 : 10, -18);
       this.dir = dir;
+      this.vx = (dir === "L" ? -1 : 1) * (canvas.width * SPEED.missileVX); 
+      this.vy = -(canvas.height * SPEED.missileVY);
+
     }
     draw() {
       ctx.save();
-      ctx.strokeStyle = "rgba(239,236,228,0.95)";
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#111";   // <-- change to dark
+    ctx.lineWidth = 4;          // <-- a bit thicker so it’s visible
       if (this.dir === "L") {
         ctx.beginPath();
         ctx.moveTo(this.x, this.y);
@@ -133,189 +207,132 @@
 
   class DepthCharge extends Sprite {
     constructor(x, y) {
-      super(x - 8, y - 8, 16, 16, 0, 12);
+      const size = canvasCSS().w * 0.025;
+      super(x - size/2, y - size/2, size, size, 0, canvasCSS().h * 0.014);
+      this.vy = canvas.height * SPEED.depthVY;
+
+
     }
-    draw() {
-      ctx.save();
-      ctx.fillStyle = "rgba(167,150,124,0.95)";
-      ctx.beginPath();
-      ctx.ellipse(this.x + this.w/2, this.y + this.h/2, this.w/2, this.h/2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
+    draw() { ctx.drawImage(IMG.depth, this.x, this.y, this.w, this.h); }
   }
 
   class Explosion extends Sprite {
-    constructor(x, y) {
-      super(x - 18, y - 18, 36, 36, 0, 0);
+    constructor(x, y, img) {
+      const size = canvasCSS().w * 0.06;
+      super(x - size/2, y - size/2, size, size, 0, 0);
       this.life = 10;
+      this.img = img;
     }
     move() { this.life -= 1; if (this.life <= 0) this.dead = true; }
     draw() {
       ctx.save();
       ctx.globalAlpha = clamp(this.life / 10, 0, 1);
-      ctx.strokeStyle = "rgba(239,236,228,0.9)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(this.x + this.w/2, this.y + this.h/2, 6 + (10 - this.life) * 2, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
       ctx.restore();
     }
   }
 
   class Enemy extends Sprite {
-    constructor(x, y, w, h, vx, vy, points, band) {
-      super(x, y, w, h, vx, vy);
-      this.points = points;
-      this.band = band; // "air" or "sea"
+    constructor(kind) {
+      const { w, h } = canvasCSS();
+      const isPlane = kind === "plane";
+
+      // sizes + points (matches your Android logic)
+      const planeSizes = [
+        { img: IMG.planeBig,   s: w * 0.07, pts: 15 },
+        { img: IMG.planeMed,   s: w * 0.06, pts: 20 },
+        { img: IMG.planeSmall, s: w * 0.03, pts: 75 },
+      ];
+      const subSizes = [
+        { img: IMG.subBig,   s: w * 0.08, pts: 25 },
+        { img: IMG.subMed,   s: w * 0.05, pts: 40 },
+        { img: IMG.subSmall, s: w * 0.03, pts: 150 },
+      ];
+
+      const pick = (isPlane ? planeSizes : subSizes)[Math.floor(Math.random() * 3)];
+      const size = pick.s;
+
+      const bandTop = isPlane ? 10 : h * 0.70;
+      const bandBot = isPlane ? h * 0.28 : h * 0.96;
+
+      let dir;
+      if (isPlane) {
+        dir = SETTINGS.planeDir;
+        if (dir === "B") dir = Math.random() < 0.5 ? "L" : "R";
+      } else {
+        dir = Math.random() < 0.5 ? "L" : "R";
+      }
+
+      const y = rand(bandTop, bandBot - size);
+
+      const speed = isPlane ? rand(w * SPEED.planeMin, w * SPEED.planeMax) : rand(w * SPEED.subMin, w * SPEED.subMax);
+
+
+      const vx = (dir === "L") ? -speed : speed;
+      const x  = (dir === "L") ? (w + size) : (-size);
+
+      // ✅ super FIRST (no 'this' before super)
+      super(x, y, size, size, vx, 0);
+
+      // now it's safe to use this
+      this.kind = kind;
+      this.img = pick.img;
+      this.points = pick.pts;
+
+      this.dir = dir;
+      this.flipX = (dir === "L");
+
+      this.bandTop = bandTop;
+      this.bandBot = bandBot;
+
       this.exploding = false;
       this.explosionLife = 0;
-      this.sizeType = "MED";
     }
+
     explode() {
       this.exploding = true;
       this.explosionLife = 10;
-      this.vx = 0; this.vy = 0;
+      this.vx = 0;
+      this.vy = 0;
     }
+
     move() {
       if (this.exploding) {
         this.explosionLife -= 1;
         if (this.explosionLife <= 0) this.reset();
         return;
       }
+
       super.move();
-      this.behavior();
-    }
-    behavior() {}
-    reset() {}
-    draw() {
-      ctx.save();
-      if (this.exploding) {
-        ctx.fillStyle = "rgba(239,236,228,0.85)";
-        ctx.beginPath();
-        ctx.arc(this.x + this.w/2, this.y + this.h/2, this.w * 0.6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-        return;
-      }
 
-      // draw by band
-      if (this.band === "air") {
-        ctx.fillStyle = "rgba(127,147,141,0.9)";
-        ctx.strokeStyle = "rgba(239,236,228,0.35)";
+      if (this.kind === "plane") {
+        if (Math.random() < 0.08) this.vy = rand(-1.8, 1.8);
+        this.y += this.vy;
       } else {
-        ctx.fillStyle = "rgba(167,150,124,0.75)";
-        ctx.strokeStyle = "rgba(239,236,228,0.25)";
+        if (Math.random() < 0.08) this.vy = rand(-1.3, 1.3);
+        this.y += this.vy;
       }
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(this.x, this.y, this.w, this.h, 10);
-      ctx.fill();
-      ctx.stroke();
 
-      ctx.restore();
-    }
-  }
+      if (this.y < this.bandTop) { this.y = this.bandTop; this.vy *= -1; }
+      if (this.y + this.h > this.bandBot) { this.y = this.bandBot - this.h; this.vy *= -1; }
 
-  class Airplane extends Enemy {
-    constructor() {
-      const sizePick = Math.floor(Math.random() * 3);
-      const sizes = [
-        { t: "BIG",   s: canvas.width * 0.065, pts: 15 },
-        { t: "MED",   s: canvas.width * 0.052, pts: 20 },
-        { t: "SMALL", s: canvas.width * 0.035, pts: 75 },
-      ];
-      const pick = sizes[sizePick];
-
-      // direction based on SETTINGS.planeDir
-      let dir = SETTINGS.planeDir;
-      if (dir === "B") dir = Math.random() < 0.5 ? "L" : "R";
-
-      const y = rand(16, canvas.height * 0.25);
-      const w = pick.s;
-      const h = pick.s * 0.55;
-
-      let x, vx;
-      if (dir === "L") { x = canvas.width + w; vx = -rand(4, 10); }
-      else { x = -w; vx = rand(4, 10); }
-
-      super(x, y, w, h, vx, 0, pick.pts, "air");
-      this.dir = dir;
-      this.sizeType = pick.t;
-    }
-
-    behavior() {
-      // light random vertical drift like your Android version
-      if (Math.random() < 0.08) this.vy = rand(-1.8, 1.8);
-      this.y += this.vy;
-
-      // stay in top quarter
-      if (this.y < 6 || this.y + this.h > canvas.height * 0.28) this.vy *= -1;
-
-      // offscreen reset
-      if (this.dir === "L" && this.x + this.w < -20) this.reset();
-      if (this.dir === "R" && this.x > canvas.width + 20) this.reset();
+      const { w } = canvasCSS();
+      if (this.x + this.w < -40 || this.x > w + 40) this.reset();
     }
 
     reset() {
-      // re-init by replacing fields
-      const fresh = new Airplane();
+      const fresh = new Enemy(this.kind);
       Object.assign(this, fresh);
     }
-  }
 
-  class Submarine extends Enemy {
-    constructor() {
-      const sizePick = Math.floor(Math.random() * 3);
-      const sizes = [
-        { t: "BIG",   s: canvas.width * 0.070, pts: 25 },
-        { t: "MED",   s: canvas.width * 0.050, pts: 40 },
-        { t: "SMALL", s: canvas.width * 0.035, pts: 150 },
-      ];
-      const pick = sizes[sizePick];
-
-      const dir = Math.random() < 0.5 ? "L" : "R";
-      const y = rand(canvas.height * 0.70, canvas.height * 0.92);
-      const w = pick.s;
-      const h = pick.s * 0.55;
-
-      let x, vx;
-      // NOTE: in your Android code the directions were a bit flipped,
-      // here we make it natural: L means move left, R means move right.
-      if (dir === "R") { x = -w; vx = SETTINGS.subSpeed * 0.35; }
-      else { x = canvas.width + w; vx = -SETTINGS.subSpeed * 0.35; }
-
-      super(x, y, w, h, vx, 0, pick.pts, "sea");
-      this.dir = dir;
-      this.sizeType = pick.t;
-    }
-
-    behavior() {
-      // occasional speed drift
-      if (Math.random() < 0.08) {
-        this.vx = (this.dir === "R" ? 1 : -1) * rand(2.2, 5.0);
-        this.vy = rand(-1.3, 1.3);
-      }
-      this.y += this.vy;
-
-      const minY = canvas.height * 0.70;
-      const maxY = canvas.height - this.h - 6;
-      if (this.y < minY) { this.y = minY; if (this.vy < 0) this.vy *= -1; }
-      if (this.y > maxY) { this.y = maxY; if (this.vy > 0) this.vy *= -1; }
-
-      // offscreen reset
-      if (this.dir === "R" && this.x > canvas.width + 20) this.reset();
-      if (this.dir === "L" && this.x + this.w < -20) this.reset();
-    }
-
-    reset() {
-      const fresh = new Submarine();
-      Object.assign(this, fresh);
+    draw() {
+      if (this.exploding) return;
+      drawImageFlip(this.img, this.x, this.y, this.w, this.h, this.flipX);
     }
   }
 
   // ===== Collections =====
-  const ship = new Ship();
+  let ship;
   let missiles = [];
   let depths = [];
   let explosions = [];
@@ -325,37 +342,31 @@
   function spawnInitial() {
     airplanes = [];
     submarines = [];
-    for (let i = 0; i < SETTINGS.planeCount; i++) airplanes.push(new Airplane());
-    for (let i = 0; i < 3; i++) submarines.push(new Submarine());
+    for (let i = 0; i < SETTINGS.planeCount; i++) airplanes.push(new Enemy("plane"));
+    for (let i = 0; i < SETTINGS.subCount; i++) submarines.push(new Enemy("sub"));
   }
-  spawnInitial();
 
-  // ===== Input (web version of onTouchEvent) =====
+  // ===== Input =====
   function handleTap(clientX, clientY) {
     if (gameOver) return;
 
-    // translate to canvas coordinates
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = (clientX - rect.left) * scaleX;
-    const y = (clientY - rect.top) * scaleY;
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
 
-    const topHalf = y <= canvas.height / 2;
+    const topHalf = y <= rect.height / 2;
 
     if (!topHalf) {
-      // depth charge
       if (SETTINGS.rapidDepth || depths.length === 0) {
         const p = ship.getBottomCenter();
         depths.push(new DepthCharge(p.x, p.y));
       }
     } else {
-      // missile left/right based on tap x
       if (SETTINGS.rapidMissile || missiles.length === 0) {
-        const dir = x <= canvas.width / 2 ? "L" : "R";
+        const dir = x <= rect.width / 2 ? "L" : "R";
         const p = dir === "L" ? ship.getLeftCannon() : ship.getRightCannon();
         missiles.push(new Missile(p.x, p.y, dir));
-        explosions.push(new Explosion(p.x, p.y));
+        //explosions.push(new Explosion(p.x, p.y, IMG.expPlane)); // muzzle flash vibe
       }
     }
   }
@@ -365,9 +376,8 @@
     handleTap(e.clientX, e.clientY);
   });
 
-  // ===== Collisions (same logic you already have) =====
+  // ===== Collisions =====
   function detectCollisions() {
-    // missiles vs airplanes
     for (const m of missiles) {
       if (m.dead) continue;
 
@@ -376,19 +386,15 @@
         if (rectsIntersect(m.rect(), a.rect())) {
           score += a.points;
           a.explode();
-          explosions.push(new Explosion(a.x + a.w/2, a.y + a.h/2));
+          explosions.push(new Explosion(a.x + a.w/2, a.y + a.h/2, IMG.expPlane));
           m.dead = true;
           break;
         }
       }
 
-      // offscreen remove
-      if (m.y + m.h < -20 || m.x + m.w < -20 || m.x > canvas.width + 20) {
-        m.dead = true;
-      }
+      if (m.y + m.h < -20 || m.x + m.w < -20 || m.x > canvasCSS().w + 20) m.dead = true;
     }
 
-    // depth charges vs submarines
     for (const d of depths) {
       if (d.dead) continue;
 
@@ -397,13 +403,13 @@
         if (rectsIntersect(d.rect(), s.rect())) {
           score += s.points;
           s.explode();
-          explosions.push(new Explosion(s.x + s.w/2, s.y + s.h/2));
+          explosions.push(new Explosion(s.x + s.w/2, s.y + s.h/2, IMG.expSub));
           d.dead = true;
           break;
         }
       }
 
-      if (d.y > canvas.height + 20) d.dead = true;
+      if (d.y > canvasCSS().h + 20) d.dead = true;
     }
 
     missiles = missiles.filter(x => !x.dead);
@@ -418,9 +424,7 @@
 
       timeEl.textContent = fmtTime(timeLeft);
 
-      if (timeLeft <= 0 && !gameOver) {
-        endGame();
-      }
+      if (timeLeft <= 0 && !gameOver) endGame();
     }
   }
 
@@ -445,38 +449,40 @@
 
   function resetGame() {
     score = 0;
-    timeLeft = 180;
+    timeLeft = SETTINGS.gameSeconds;
     lastSecondAt = performance.now();
     paused = false;
     gameOver = false;
+
     missiles = [];
     depths = [];
     explosions = [];
+
+    ship = new Ship();
     spawnInitial();
+
     overlay.classList.add("hidden");
+    btnPause.textContent = "Pause";
+    drawHUD();
   }
 
   // ===== Render =====
   function drawBackground() {
-    // sky + sea split like your "water line"
-    const waterY = canvas.height * 0.62;
+    const { w, h } = canvasCSS();
+    const waterY = h * 0.62;
 
     // sky
     ctx.fillStyle = "rgba(239,236,228,0.02)";
-    ctx.fillRect(0, 0, canvas.width, waterY);
+    ctx.fillRect(0, 0, w, waterY);
 
     // sea
     ctx.fillStyle = "rgba(127,147,141,0.08)";
-    ctx.fillRect(0, waterY, canvas.width, canvas.height - waterY);
+    ctx.fillRect(0, waterY, w, h - waterY);
 
-    // water line tiles
-    ctx.strokeStyle = "rgba(239,236,228,0.12)";
-    ctx.lineWidth = 2;
-    for (let x = 0; x < canvas.width; x += 18) {
-      ctx.beginPath();
-      ctx.moveTo(x, waterY);
-      ctx.lineTo(x + 10, waterY);
-      ctx.stroke();
+    // water tiles using your water.png
+    const tile = Math.max(18, w * 0.02);
+    for (let x = 0; x < w + tile; x += tile) {
+      ctx.drawImage(IMG.water, x, waterY - tile * 0.25, tile, tile);
     }
   }
 
@@ -486,7 +492,7 @@
     timeEl.textContent = fmtTime(timeLeft);
   }
 
-  // ===== Main Loop (web version of Fire Handler) =====
+  // ===== Main Loop =====
   function tick(now) {
     if (!paused) {
       ship.move();
@@ -502,39 +508,21 @@
       drawHUD();
     }
 
-    // draw always (even when paused)
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const { w, h } = canvasCSS();
+    ctx.clearRect(0, 0, w, h);
+
     drawBackground();
 
     ship.draw();
     airplanes.forEach(a => a.draw());
     submarines.forEach(s => s.draw());
+
     depths.forEach(d => d.draw());
     missiles.forEach(m => m.draw());
     explosions.forEach(e => e.draw());
 
     requestAnimationFrame(tick);
   }
-
-  // ===== Resize canvas to look good on any screen =====
-  function fitCanvas() {
-    // keep a stable internal resolution (so physics feels consistent)
-    // but also adapt a bit to device width
-    const maxW = 980;
-    const w = Math.min(maxW, Math.max(320, window.innerWidth - 32));
-    const h = Math.round(w * 0.62);
-    canvas.width = Math.round(w);
-    canvas.height = Math.round(h);
-
-    // rebuild ship + enemies to match new scale
-    // (keeps behavior consistent when rotating phone)
-    resetGame();
-  }
-
-  window.addEventListener("resize", () => {
-    clearTimeout(window.__fitT);
-    window.__fitT = setTimeout(fitCanvas, 120);
-  });
 
   // ===== Buttons =====
   btnPause.addEventListener("click", () => {
@@ -545,13 +533,66 @@
 
   btnRestart.addEventListener("click", () => resetGame());
   btnQuit.addEventListener("click", () => {
-    // simplest "quit" for web: just hide overlay and pause
     overlay.classList.add("hidden");
     paused = true;
+    btnPause.textContent = "Resume";
   });
 
   // ===== Start =====
-  fitCanvas();
-  drawHUD();
-  requestAnimationFrame(tick);
+  async function start() {
+    try {
+      const [
+        shipImg, waterImg, depthImg,
+        pBig, pMed, pSmall,
+        sBig, sMed, sSmall,
+        expPlane, expSub
+      ] = await Promise.all([
+        loadImage(ASSETS.ship),
+        loadImage(ASSETS.water),
+        loadImage(ASSETS.depth),
+
+        loadImage(ASSETS.planeBig),
+        loadImage(ASSETS.planeMed),
+        loadImage(ASSETS.planeSmall),
+
+        loadImage(ASSETS.subBig),
+        loadImage(ASSETS.subMed),
+        loadImage(ASSETS.subSmall),
+
+        loadImage(ASSETS.expPlane),
+        loadImage(ASSETS.expSub),
+      ]);
+
+      IMG = {
+        ship: shipImg,
+        water: waterImg,
+        depth: depthImg,
+
+        planeBig: pBig,
+        planeMed: pMed,
+        planeSmall: pSmall,
+
+        subBig: sBig,
+        subMed: sMed,
+        subSmall: sSmall,
+
+        expPlane,
+        expSub
+      };
+
+      fitCanvas();
+      resetGame();
+      requestAnimationFrame(tick);
+
+    } catch (err) {
+      console.error(err);
+      alert(
+        "Image loading / startup error.\n\n" +
+        err.message +
+        "\n\nDouble-check:\n- file names match EXACT (including .PNG caps)\n- images are inside /assets\n- paths are correct"
+      );
+    }
+  }
+
+  start();
 })();
