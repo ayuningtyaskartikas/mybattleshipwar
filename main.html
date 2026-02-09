@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Battleship War Game - Ayu Sari</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">BattleShip War</div>
+
+    <div class="hud">
+      <div>Score: <span id="score">0</span></div>
+      <div>High: <span id="high">0</span></div>
+      <div>Time: <span id="time">03:00</span></div>
+    </div>
+
+    <button id="btnPause" class="btn">Pause</button>
+  </header>
+
+  <main class="wrap">
+    <canvas id="game" width="900" height="560" aria-label="BattleShip War game canvas"></canvas>
+
+    <section class="help">
+      <p><b>How to play</b></p>
+      <ul>
+        <li>Click / tap <b>top half</b> to shoot a missile (left/right based on where you tap).</li>
+        <li>Click / tap <b>bottom half</b> to drop a depth charge.</li>
+        <li>Hit airplanes (top) with missiles, submarines (bottom) with depth charges.</li>
+      </ul>
+    </section>
+  </main>
+
+  <div id="overlay" class="overlay hidden">
+    <div class="modal">
+      <h2 id="overTitle">Game Over</h2>
+      <p id="overMsg"></p>
+      <div class="row">
+        <button id="btnRestart" class="btn primary">Play Again</button>
+        <button id="btnQuit" class="btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>
