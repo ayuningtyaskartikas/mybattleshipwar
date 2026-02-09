@@ -112,7 +112,7 @@
     rapidDepth: false,
     rapidMissile: false,
     planeDir: "B",
-    gameSeconds: 180
+    gameSeconds: 60
   };
 
   // ===== High Score =====
