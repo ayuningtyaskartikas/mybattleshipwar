@@ -77,10 +77,10 @@
   // ===== SPEED SETTINGS (tweak these) =====
   const SPEED = {
     ship: 0.0014,
-    planeMin: 0.0016,
-    planeMax: 0.0038,
-    subMin: 0.0009,
-    subMax: 0.0021,
+    planeMin: 0.0006,
+    planeMax: 0.0012,
+    subMin: 0.0007,
+    subMax: 0.0012,
     missileVX: 0.010,
     missileVY: 0.030,
     depthVY: 0.010
@@ -108,7 +108,7 @@
   const SETTINGS = {
     planeCount: 6,
     subCount: 3,
-    subSpeed: 10,
+    subSpeed: 7,
     rapidDepth: false,
     rapidMissile: false,
     planeDir: "B",
