@@ -43,7 +43,7 @@
   // ===== NEW: Audio (starts only after user clicks Start) =====
   const SFX = {
     enabled: true, // set false if you don’t have audio files yet
-    bgm: new Audio("assets/pirate-soundtrack.ogg"),
+    bgm: new Audio("assets/pirates_soundtrack.ogg"),
     shoot: new Audio("assets/shoot.ogg"),
     depth: new Audio("assets/depth_charge.ogg"),
     explode: new Audio("assets/explode.ogg"),
@@ -51,7 +51,7 @@
 
   // safe defaults
   SFX.bgm.loop = true;
-  SFX.bgm.volume = 0.45;
+  SFX.bgm.volume = 0.35;
   SFX.shoot.volume = 0.55;
   SFX.depth.volume = 0.55;
   SFX.explode.volume = 0.6;
