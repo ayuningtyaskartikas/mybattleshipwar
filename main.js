@@ -43,7 +43,7 @@
   // ===== NEW: Audio (starts only after user clicks Start) =====
   const SFX = {
     enabled: true, // set false if you don’t have audio files yet
-    bgm: new Audio("assets/pirate-theme.ogg"),
+    bgm: new Audio("assets/pirate-soundtrack.ogg"),
     shoot: new Audio("assets/shoot.ogg"),
     depth: new Audio("assets/depth_charge.ogg"),
     explode: new Audio("assets/explode.ogg"),
