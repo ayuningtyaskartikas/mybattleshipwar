@@ -51,7 +51,7 @@
 
   // safe defaults
   SFX.bgm.loop = true;
-  SFX.bgm.volume = 0.35;
+  SFX.bgm.volume = 0.45;
   SFX.shoot.volume = 0.55;
   SFX.depth.volume = 0.55;
   SFX.explode.volume = 0.6;
