@@ -42,7 +42,7 @@
 
   // ===== NEW: Audio (starts only after user clicks Start) =====
   const SFX = {
-    enabled: true, // set false if you don’t have audio files yet
+    enabled: true, // set false if you don't have audio files yet
     bgm: new Audio("assets/pirates_soundtrack.ogg"),
     shoot: new Audio("assets/shoot.ogg"),
     depth: new Audio("assets/depth_charge.ogg"),
@@ -60,7 +60,7 @@
     if (!SFX.enabled) return;
     if (!aud) return;
     try {
-      // clone so fast taps don’t cut off sounds
+      // clone so fast taps don't cut off sounds
       const s = aud.cloneNode();
       s.volume = aud.volume;
       s.play().catch(() => {});
@@ -77,10 +77,10 @@
   // ===== SPEED SETTINGS (tweak these) =====
   const SPEED = {
     ship: 0.0014,
-    planeMin: 0.0006,
-    planeMax: 0.0012,
-    subMin: 0.0007,
-    subMax: 0.0012,
+    planeMin: 0.0003,   // reduced from 0.0006
+    planeMax: 0.0006,   // reduced from 0.0012
+    subMin: 0.0003,     // reduced from 0.0007
+    subMax: 0.0006,     // reduced from 0.0012
     missileVX: 0.010,
     missileVY: 0.030,
     depthVY: 0.010
@@ -406,9 +406,6 @@
         const p = dir === "L" ? ship.getLeftCannon() : ship.getRightCannon();
         missiles.push(new Missile(p.x, p.y, dir));
         playSound(SFX.shoot);
-
-        // ✅ muzzle flash removed already:
-        // explosions.push(new Explosion(p.x, p.y, IMG.expPlane));
       }
     }
   }
@@ -515,13 +512,8 @@
     const { w, h } = canvasCSS();
     const waterY = h * 0.62;
 
-    // If you want pure white:
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, w, h);
-
-    // optional very subtle bands (remove if you want plain white)
-    // ctx.fillStyle = "rgba(0,0,0,0.02)";
-    // ctx.fillRect(0, 0, w, waterY);
 
     // water tiles
     const tile = Math.max(18, w * 0.02);
