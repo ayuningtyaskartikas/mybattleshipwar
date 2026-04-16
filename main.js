@@ -1,5 +1,5 @@
 (() => {
-  // ===== DOM =====
+  // DOM
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
 
@@ -40,7 +40,7 @@
     });
   }
 
-  // ===== NEW: Audio (starts only after user clicks Start) =====
+  // NEW: Audio (starts only after user clicks Start)
   const SFX = {
     enabled: true, // set false if you don't have audio files yet
     bgm: new Audio("assets/pirates_soundtrack.ogg"),
@@ -74,7 +74,7 @@
     SFX.bgm.play().catch(() => {});
   }
 
-  // ===== SPEED SETTINGS (tweak these) =====
+  // SPEED SETTINGS
   const SPEED = {
     ship: 0.0014,
     planeMin: 0.0003,   // reduced from 0.0006
@@ -104,7 +104,7 @@
     return { w: rect.width, h: rect.height };
   }
 
-  // ===== Settings =====
+  // Settings
   const SETTINGS = {
     planeCount: 6,
     subCount: 3,
@@ -115,22 +115,22 @@
     gameSeconds: 60
   };
 
-  // ===== High Score =====
+  // High Score
   const HS_KEY = "battleshipwar_highscore";
   let highScore = Number(localStorage.getItem(HS_KEY) || 0);
   highEl.textContent = String(highScore);
 
-  // ===== Game State =====
+  // Game State
   let score = 0;
   let timeLeft = SETTINGS.gameSeconds;
   let lastSecondAt = performance.now();
   let paused = false;
   let gameOver = false;
 
-  // ===== NEW: Running state (false until Start click) =====
+  // NEW: Running state (false until Start click)
   let running = false;
 
-  // ===== Assets =====
+  // Assets
   const ASSETS = {
     ship: "assets/ship.png",
     water: "assets/water.png",
@@ -150,7 +150,7 @@
 
   let IMG = null;
 
-  // ===== Canvas sizing (crisp on retina) =====
+  // Canvas sizing
   function fitCanvas() {
     const maxW = 980;
     const cssW = Math.min(maxW, Math.max(320, window.innerWidth - 32));
@@ -173,7 +173,7 @@
     window.__fitT = setTimeout(fitCanvas, 120);
   });
 
-  // ===== Entities =====
+  // Entities
   class Sprite {
     constructor(x, y, w, h, vx = 0, vy = 0) {
       this.x = x; this.y = y; this.w = w; this.h = h;
@@ -368,7 +368,7 @@
     }
   }
 
-  // ===== Collections =====
+  // Collections
   let ship;
   let missiles = [];
   let depths = [];
@@ -383,7 +383,7 @@
     for (let i = 0; i < SETTINGS.subCount; i++) submarines.push(new Enemy("sub"));
   }
 
-  // ===== Input =====
+  // Input
   function handleTap(clientX, clientY) {
     if (!running) return;
     if (paused || gameOver) return;
@@ -415,7 +415,7 @@
     handleTap(e.clientX, e.clientY);
   });
 
-  // ===== Collisions =====
+  // Collisions
   function detectCollisions() {
     for (const m of missiles) {
       if (m.dead) continue;
@@ -457,7 +457,7 @@
     depths  = depths.filter(x => !x.dead);
   }
 
-  // ===== Timer/GameOver =====
+  // Timer/GameOver
   function updateTimer(now) {
     if (now - lastSecondAt >= 1000) {
       timeLeft = Math.max(0, timeLeft - 1);
@@ -507,7 +507,7 @@
     drawHUD();
   }
 
-  // ===== Render =====
+  // Render
   function drawBackground() {
     const { w, h } = canvasCSS();
     const waterY = h * 0.62;
@@ -528,7 +528,7 @@
     timeEl.textContent = fmtTime(timeLeft);
   }
 
-  // ===== Main Loop =====
+  // Main Loop
   function tick(now) {
     if (running && !paused) {
       ship.move();
@@ -560,7 +560,7 @@
     requestAnimationFrame(tick);
   }
 
-  // ===== Buttons =====
+  // Buttons
   btnPause.addEventListener("click", () => {
     if (!running) return;
     if (gameOver) return;
@@ -594,7 +594,7 @@
     });
   }
 
-  // ===== Start =====
+  // Start
   async function start() {
     try {
       const [
